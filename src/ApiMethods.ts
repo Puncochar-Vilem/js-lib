@@ -40,12 +40,16 @@ export class ApiMethods {
         switch (folderName) {
             case FolderNames.calendar:
                 return 'Calendars';
+            case FolderNames.goodsInCart:
+                return 'GoodsInCart';
+            case FolderNames.goodsInSet:
+                return 'GoodsInSet';
             case FolderNames.journal:
                 return 'Journals';
             case FolderNames.marketing:
                 return 'MarketingCampaigns';
             case FolderNames.marketingList:
-                return 'MarketingListsRecords';
+                return 'MarketingLists';
             case FolderNames.revisionsHistory:
                 return 'RevisionHistoryRecords';
             case FolderNames.vacation:
@@ -54,6 +58,25 @@ export class ApiMethods {
                 return 'WorkflowHistoryRecords';
             default:
                 return folderName;
+        }
+    };
+
+    /**
+    * Returns the folder an item type belongs to, for types whose name doesn't pluralise to it.
+    * For example type GoodInCart belongs to folder GoodsInCart.
+    */
+    static readonly getFolderNameByItemTypeName = (itemTypeName: string): TFolderName | null => {
+        switch (itemTypeName) {
+            case "Calendar": return FolderNames.calendar;
+            case "GoodInCart": return FolderNames.goodsInCart;
+            case "GoodInSet": return FolderNames.goodsInSet;
+            case "Journal": return FolderNames.journal;
+            case "MarketingCampaign": return FolderNames.marketing;
+            case "MarketingList": return FolderNames.marketingList;
+            case "RevisionHistoryRecord": return FolderNames.revisionsHistory;
+            case "Vacation": return FolderNames.vacation;
+            case "WorkflowHistoryRecord": return FolderNames.workflowHistory;
+            default: return null;
         }
     };
 
