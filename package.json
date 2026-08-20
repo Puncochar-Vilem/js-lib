@@ -1,6 +1,6 @@
 {
   "name": "@eway-crm/connector",
-  "version": "1.0.265",
+  "version": "1.0.266",
   "description": "eWay-CRM API JavaScript connector library.",
   "main": "lib/cjs/index.js",
   "module": "lib/esm/index.js",
