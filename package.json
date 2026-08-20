@@ -41,6 +41,7 @@
     "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^11.0.0",
     "@types/node": "^20.19.42",
+    "@types/pluralize": "^0.0.33",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^9.39.5",
@@ -60,6 +61,7 @@
     "compare-versions": "^5.0.3",
     "es6-promise": "^4.2.8",
     "jwt-decode": "^3.1.2",
+    "pluralize": "^8.0.0",
     "universal-base64url": "^1.1.0"
   }
 }
