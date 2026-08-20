@@ -23,16 +23,26 @@ export interface ISessionHandler {
     lastSuccessfulLoginResponse?: IApiLoginResponse;
 }
 
+/** Why a call failed - a result the eWay-API refused on the app level, or any other error. */
+export type TCallFailure = TUnionError | IApiResult;
+
+/**
+ * Notified of every failed ask or call method, so a consumer can react to failures of the connection as a whole.
+ * Left out: rcBadSession (recovered and repeated) and the token endpoint, which OAuthHelper posts on its own.
+ */
+export type TCallFailedCallback = (failure: TCallFailure, methodName: string) => void;
+
 export class ApiConnection {
     private readonly svcUri: string;
     private readonly baseUri: string;
     public readonly sessionHandler: ISessionHandler;
     private readonly errorCallback: ((error: TUnionError, data?: TInputData | null) => void) | undefined;
     private readonly supportGetItemPreviewMethod: boolean;
+    private readonly callFailedCallback: TCallFailedCallback | undefined;
 
     private sessionId: string | null;
 
-    constructor(apiServiceUri: string, sessionHandler: ISessionHandler, errorCallback?: (error: TUnionError, data?: TInputData | null) => void, supportGetItemPreviewMethod?: boolean) {
+    constructor(apiServiceUri: string, sessionHandler: ISessionHandler, errorCallback?: (error: TUnionError, data?: TInputData | null) => void, supportGetItemPreviewMethod?: boolean, callFailedCallback?: TCallFailedCallback) {
         if (!apiServiceUri) {
             throw new Error("The argument 'apiServiceUri' cannot be empty.");
         }
@@ -59,6 +69,7 @@ export class ApiConnection {
         this.errorCallback = errorCallback;
         this.sessionId = null;
         this.supportGetItemPreviewMethod = supportGetItemPreviewMethod ?? false;
+        this.callFailedCallback = callFailedCallback;
     }
 
     get supportsGetItemPreviewMethod() {
@@ -92,9 +103,24 @@ export class ApiConnection {
         appVersion: string,
         errorCallback?: (error: TUnionError) => void,
         refreshTokenCallback?: (tokenData: ITokenData) => void,
-        supportGetItemPreviewMethod?: boolean
+        supportGetItemPreviewMethod?: boolean,
+        callFailedCallback?: TCallFailedCallback
     ): ApiConnection {
-        return new ApiConnection(apiServiceUri, new OAuthSessionHandler(username, clientId, clientSecret, refreshToken, accessToken, appVersion, errorCallback, refreshTokenCallback), errorCallback, supportGetItemPreviewMethod);
+        return new ApiConnection(apiServiceUri, new OAuthSessionHandler(username, clientId, clientSecret, refreshToken, accessToken, appVersion, errorCallback, refreshTokenCallback), errorCallback, supportGetItemPreviewMethod, callFailedCallback);
+    }
+
+    /**
+     * True when the failure means the web service has moved to another url. App level failures spell the code
+     * `ReturnCode`, errors spell it `returnCode`, so both are checked here instead of in every consumer.
+     */
+    static isWebServiceMovedFailure(failure: unknown): boolean {
+        if (!failure || typeof failure !== 'object') {
+            return false;
+        }
+
+        const { returnCode, ReturnCode } = failure as { returnCode?: string; ReturnCode?: string };
+
+        return returnCode === ReturnCodes.rcWebServiceMoved || ReturnCode === ReturnCodes.rcWebServiceMoved;
     }
 
     static normalizeWsUrl(wsUrl: string | null): string | null {
@@ -173,6 +199,36 @@ export class ApiConnection {
         return url;
     };
 
+    /** Builds the rejection handler shared by the ask* methods. */
+    private readonly createAskRejectionHandler = (reject: (reason: TCallFailure) => void, catchGlobally?: boolean) => {
+        return (failure: TCallFailure): void => {
+            reject(failure);
+
+            if (catchGlobally) {
+                throw failure;
+            }
+        };
+    };
+
+    /** Announces a failed call. The callback only observes, so what it throws must not replace the failure itself. */
+    private readonly notifyCallFailed = (failure: TCallFailure, methodName: string): void => {
+        if (!this.callFailedCallback) {
+            return;
+        }
+
+        try {
+            this.callFailedCallback(failure, methodName);
+        } catch (e) {
+            const error = new Error('Call failed callback failed.\n' + ErrorHelper.stringifyError(e as Error));
+            if (this.errorCallback) {
+                this.errorCallback(error);
+            } else {
+                // Nowhere to report it, but it must not vanish - rethrowing here would replace the failure.
+                console.error(error);
+            }
+        }
+    };
+
     /**
      * Creates a promise for async file upload using binary stream
      * @param file Single file to be uploaded.
@@ -189,12 +245,7 @@ export class ApiConnection {
         catchGlobally?: boolean
     ): Promise<TResult> => {
         return new Promise<TResult>((resolve, reject) => {
-            const errClb = catchGlobally
-                ? (e: TUnionError | IApiResult): void => {
-                    reject(e);
-                    throw e;
-                }
-                : reject;
+            const errClb = this.createAskRejectionHandler(reject, catchGlobally);
 
             this.callCustomUploadMethod<TResult>(file, data, methodName, resolve, errClb, errClb, config);
         });
@@ -211,12 +262,7 @@ export class ApiConnection {
 
     readonly askUploadMethod = (itemGuid: string, fileName: string, file: File, config?: AxiosRequestConfig, catchGlobally?: boolean): Promise<IApiResult> => {
         return new Promise<IApiResult>((resolve, reject) => {
-            const errClb = catchGlobally
-                ? (e: TUnionError | IApiResult): void => {
-                    reject(e);
-                    throw e;
-                }
-                : reject;
+            const errClb = this.createAskRejectionHandler(reject, catchGlobally);
 
             this.callUploadMethod(itemGuid, fileName, file, resolve, errClb, errClb, config);
         });
@@ -293,7 +339,7 @@ export class ApiConnection {
         const methodUrl = `${this.svcUri}/${methodName}?sessionId=${this.sessionId}&${dataUrlSearchParams.toString()}`;
         const promise = Axios.post<TResult>(methodUrl, file, config);
 
-        ApiConnection.handleCallPromise<TResult>(promise, successCallback, unsuccessClb, errorClb);
+        this.handleCallPromise<TResult>(methodName, promise, successCallback, unsuccessClb, errorClb);
     };
 
     /**
@@ -328,12 +374,7 @@ export class ApiConnection {
      */
     readonly askMethod = <TResult extends IApiResult>(methodName: string, data: TInputData, httpMethod?: HttpMethod, catchGlobally?: boolean): Promise<TResult> => {
         return new Promise<TResult>((resolve, reject) => {
-            const errClb = catchGlobally
-                ? (e: TUnionError | TResult): void => {
-                    reject(e);
-                    throw e;
-                }
-                : reject;
+            const errClb = this.createAskRejectionHandler(reject, catchGlobally);
             this.callMethod<TResult>(methodName, data, resolve, errClb, httpMethod, errClb);
         });
     };
@@ -460,7 +501,7 @@ export class ApiConnection {
             }
         };
 
-        ApiConnection.handleCallPromise(promise, successCallback, unsuccessCallback, errorClb);
+        this.handleCallPromise(methodName, promise, successCallback, unsuccessCallback, errorClb);
     };
 
     readonly getItemPreviewGetMethodUrl = (folderName: string, itemGuid: string, itemVersion?: number): string => {
@@ -499,29 +540,53 @@ export class ApiConnection {
         this.sessionId = sessionId;
     };
 
-    private static handleCallPromise<TResult extends IApiResult>(
+    /**
+     * The single place every call of this connection ends in, ask* and call* alike, so callFailedCallback is
+     * announced from here to cover them all.
+     */
+    private readonly handleCallPromise = <TResult extends IApiResult>(
+        methodName: string,
         call: Promise<AxiosResponse<TResult>>,
         successCallback: (result: TResult) => void,
         unsuccessCallback: (result: TResult) => void,
         errorCallback: (error: TUnionError) => void
-    ): void {
+    ): void => {
+        // A call fails at most once. The catch below also sees what the then callback rethrows (how
+        // catchGlobally works), so without this flag the same failure would be announced twice.
+        let hasAnnounced = false;
+        const announce = (failure: TCallFailure): void => {
+            if (hasAnnounced) {
+                return;
+            }
+
+            hasAnnounced = true;
+            this.notifyCallFailed(failure, methodName);
+        };
+
         call.then((response: AxiosResponse<TResult>) => {
             if (response.status === 200) {
                 if (response.data.ReturnCode === ReturnCodes.rcSuccess) {
                     successCallback(response.data);
                 } else {
+                    // rcBadSession is left out - callMethod logs in again and repeats the call, so nothing has
+                    // failed for the consumer. Its logOut branch and callWithoutSession callers lose it too.
+                    if (response.data.ReturnCode !== ReturnCodes.rcBadSession) {
+                        announce(response.data);
+                    }
+
                     unsuccessCallback(response.data);
                 }
             } else {
-                errorCallback(HttpRequestError.from(response));
+                const failure = HttpRequestError.from(response);
+                announce(failure);
+                errorCallback(failure);
             }
         }).catch((error: AxiosError) => {
-            if (error.response) {
-                errorCallback(HttpRequestError.from(error.response));
-                return;
-            }
-
-            errorCallback(error);
+            // Reached by a rejected call, but also by anything the callbacks above throw - a successful call
+            // whose successCallback threw lands here too and is announced as a failure. Long-standing quirk.
+            const failure = error.response ? HttpRequestError.from(error.response) : error;
+            announce(failure);
+            errorCallback(failure);
         });
-    }
+    };
 }

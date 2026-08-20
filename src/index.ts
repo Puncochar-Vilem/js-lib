@@ -1,5 +1,5 @@
 import * as Promise from 'es6-promise';
-import { ApiConnection, ISessionHandler } from './ApiConnection';
+import { ApiConnection, ISessionHandler, TCallFailedCallback, TCallFailure } from './ApiConnection';
 import { HttpMethod } from './HttpMethod';
 import { ReturnCodes } from './ReturnCodes';
 import { ITokenizedApiResult } from './tokenizedServices/ITokenizedApiResult';
@@ -126,6 +126,8 @@ export {
     SentimentTone,
     HttpMethod,
     ISessionHandler,
+    TCallFailure,
+    TCallFailedCallback,
     ReturnCodes,
     ITokenizedApiResult,
     TokenizedServiceConnection,
