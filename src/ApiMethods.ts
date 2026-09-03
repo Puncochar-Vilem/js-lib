@@ -1,3 +1,4 @@
+import * as pluralize from "pluralize";
 import type { TFolderName } from "./constants/FolderNames";
 import { FolderNames } from "./constants/FolderNames";
 
@@ -40,6 +41,10 @@ export class ApiMethods {
         switch (folderName) {
             case FolderNames.calendar:
                 return 'Calendars';
+            case FolderNames.goodsInCart:
+                return 'GoodsInCart';
+            case FolderNames.goodsInSet:
+                return 'GoodsInSet';
             case FolderNames.journal:
                 return 'Journals';
             case FolderNames.marketing:
@@ -55,6 +60,34 @@ export class ApiMethods {
             default:
                 return folderName;
         }
+    };
+
+    /**
+    * Returns the folder an item type belongs to. Item type names are singular, so the folder name is their plural form.
+    * Returns null when the item type name does not belong to any known folder.
+    */
+    static readonly getFolderNameByApiItemTypeName = (itemTypeName: string): TFolderName | null => {
+        switch (itemTypeName) {
+            case "Calendar": return FolderNames.calendar;
+            case "GoodInCart": return FolderNames.goodsInCart;
+            case "GoodInSet": return FolderNames.goodsInSet;
+            case "Journal": return FolderNames.journal;
+            case "MarketingCampaign": return FolderNames.marketing;
+            case "MarketingListsRecord": return FolderNames.marketingList;
+            case "RevisionHistoryRecord": return FolderNames.revisionsHistory;
+            case "Vacation": return FolderNames.vacation;
+            case "WorkflowHistoryRecord": return FolderNames.workflowHistory;
+        }
+
+        const pluralizedItemTypeName = pluralize.plural(itemTypeName);
+        if (FolderNames.isValidFolderName(pluralizedItemTypeName))
+            return pluralizedItemTypeName;
+
+        // Folders of uncountable item types keep the singular form.
+        if (FolderNames.isValidFolderName(itemTypeName))
+            return itemTypeName;
+
+        return null;
     };
 
     static readonly getGetFolderNameByItemGuidsMethodName = (folderName: TFolderName) => {

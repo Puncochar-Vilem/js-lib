@@ -81,7 +81,7 @@ export type TFolderName = 'Actions'
     | 'XsltTransformationsModels';
 
 export class FolderNames {
-    static isValidFolderName = (folderName: string): boolean => {
+    static isValidFolderName = (folderName: string): folderName is TFolderName => {
         return Object.values(FolderNames).includes(folderName);
     };
 
