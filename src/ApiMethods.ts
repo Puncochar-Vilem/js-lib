@@ -50,7 +50,7 @@ export class ApiMethods {
             case FolderNames.marketing:
                 return 'MarketingCampaigns';
             case FolderNames.marketingList:
-                return 'MarketingLists';
+                return 'MarketingListsRecords';
             case FolderNames.revisionsHistory:
                 return 'RevisionHistoryRecords';
             case FolderNames.vacation:
@@ -73,7 +73,7 @@ export class ApiMethods {
             case "GoodInSet": return FolderNames.goodsInSet;
             case "Journal": return FolderNames.journal;
             case "MarketingCampaign": return FolderNames.marketing;
-            case "MarketingList": return FolderNames.marketingList;
+            case "MarketingListsRecord": return FolderNames.marketingList;
             case "RevisionHistoryRecord": return FolderNames.revisionsHistory;
             case "Vacation": return FolderNames.vacation;
             case "WorkflowHistoryRecord": return FolderNames.workflowHistory;
